@@ -1,5 +1,7 @@
 $Script:RegPath = "HKLM:\Software\WindowsUpdateCompliance\"
 Add-Type -AssemblyName System.Web
+$StatusTime = Get-Date
+
 function Get-Windows11ReleaseTableContent {
     $url = "https://learn.microsoft.com/en-us/windows/release-health/windows11-release-information"
     try {
@@ -165,5 +167,6 @@ New-ItemProperty -Path $RegPath -Name "OSBuildNumber" -Value $OSBuildNumber -Pro
 New-ItemProperty -Path $RegPath -Name "OSDisplayVersion" -Value $OSDisplayVersion -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 New-ItemProperty -Path $RegPath -Name "DaysSinceCurrentUpdateReleaseDate" -Value $DaysSinceCurrentUpdateReleaseDate -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 New-ItemProperty -Path $RegPath -Name "Status" -Value $Status -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
+New-ItemProperty -Path $RegPath -Name "StatusTime" -Value $StatusTime -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 
 return $CurrentUpdate | ConvertTo-Json -Compress
