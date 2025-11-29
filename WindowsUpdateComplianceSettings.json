@@ -5,7 +5,7 @@
       "Operator": "LessEquals",
       "DataType": "Int64",
       "Operand": "30",
-      "MoreInfoUrl": "https://bing.com",
+      "MoreInfoUrl": "https://support.microsoft.com/en-us/windows/install-windows-updates-3c5ae7fc-9fb6-9af1-1984-b5e0412c556a",
       "RemediationStrings": [
         {
           "Language": "en_US",
@@ -19,7 +19,7 @@
       "Operator": "IsEquals",
       "DataType": "String",
       "Operand": "UpdateFoundInCatalog",
-      "MoreInfoUrl": "https://bing.com",
+      "MoreInfoUrl": "https://support.microsoft.com/en-us/windows/install-windows-updates-3c5ae7fc-9fb6-9af1-1984-b5e0412c556a",
       "RemediationStrings": [
         {
           "Language": "en_US",
@@ -29,4 +29,5 @@
       ]
     }
   ]
+
 }
