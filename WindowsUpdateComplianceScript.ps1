@@ -156,11 +156,13 @@ If ($Status -ne "NeitherWindows10NotWindows11"){
 #Formating Results
 $CurrentUpdate['OSName'] = $OSName
 $CurrentUpdate['OSBuildNumber'] = $OSBuildNumber
+$CurrentUpdate['OSDisplayVersion'] = $OSDisplayVersion
 $CurrentUpdate['DaysSinceCurrentUpdateReleaseDate'] = $DaysSinceCurrentUpdateReleaseDate
 $CurrentUpdate['Status'] = $Status
 
 New-ItemProperty -Path $RegPath -Name "OSName" -Value $OSName -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 New-ItemProperty -Path $RegPath -Name "OSBuildNumber" -Value $OSBuildNumber -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
+New-ItemProperty -Path $RegPath -Name "OSDisplayVersion" -Value $OSDisplayVersion -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 New-ItemProperty -Path $RegPath -Name "DaysSinceCurrentUpdateReleaseDate" -Value $DaysSinceCurrentUpdateReleaseDate -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 New-ItemProperty -Path $RegPath -Name "Status" -Value $Status -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 
