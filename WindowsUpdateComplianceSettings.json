@@ -1,0 +1,32 @@
+{
+  "Rules": [
+    {
+      "SettingName": "DaysSinceCurrentUpdateReleaseDate",
+      "Operator": "LessEquals",
+      "DataType": "Int64",
+      "Operand": "30",
+      "MoreInfoUrl": "https://bing.com",
+      "RemediationStrings": [
+        {
+          "Language": "en_US",
+          "Title": "Windows Update Required!",
+          "Description": "Windows needs to be updated with latest security patch"
+        }
+      ]
+    },
+    {
+      "SettingName": "Status",
+      "Operator": "IsEquals",
+      "DataType": "String",
+      "Operand": "UpdateFoundInCatalog",
+      "MoreInfoUrl": "https://bing.com",
+      "RemediationStrings": [
+        {
+          "Language": "en_US",
+          "Title": "Windows Update Required!",
+          "Description": "Windows needs to be updated with latest security patch"
+        }
+      ]
+    }
+  ]
+}
