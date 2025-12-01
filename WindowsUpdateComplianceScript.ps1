@@ -1,7 +1,4 @@
-$Script:RegPath = "HKLM:\Software\WindowsUpdateCompliance\"
 Add-Type -AssemblyName System.Web
-$StatusTime = Get-Date
-
 function Get-Windows11ReleaseTableContent {
     $url = "https://learn.microsoft.com/en-us/windows/release-health/windows11-release-information"
     try {
@@ -109,7 +106,8 @@ function Get-Windows10ReleaseTableContent {
     }
 }
 
-#Create Loging Registry Path
+#Create Logging Registry Path
+$Script:RegPath = "HKLM:\Software\WindowsUpdateCompliance\"
 If (!(Test-Path $RegPath)){
 	New-Item -Path $RegPath -Force -ErrorAction SilentlyContinue | Out-Null
 }
@@ -120,9 +118,24 @@ $OSDisplayVersion = $ComputerInfo.OSDisplayVersion
 $OSName = $ComputerInfo.OSName
 $WinCV = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion")
 $OSBuildNumber = $WinCV.CurrentBuild + "." + $WinCV.UBR
+
+#Initialize Variables
+$StatusTime = Get-Date
 $CurrentUpdate = [ordered]@{}
 $DaysSinceCurrentUpdateReleaseDate = -1
 $isLatest = $false
+
+
+#Get Windows Updates Policy Settings
+# For Quality Update Grace Period
+$QualityUpdateGracePeriod = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\PolicyManager\current\device\Update" -ErrorAction SilentlyContinue).ConfigureDeadlineGracePeriod
+# For Feature Update Grace Period (if separately configured)
+$FeatureUpdateGracePeriod = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\PolicyManager\current\device\Update" -ErrorAction SilentlyContinue).ConfigureDeadlineGracePeriodForFeatureUpdates
+# For Quality Update Deadline (days from publication)
+$QualityUpdateDeadline = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\PolicyManager\current\device\Update" -ErrorAction SilentlyContinue).ConfigureDeadlineForQualityUpdates
+# For Feature Update Deadline (days from publication)
+$FeatureUpdateDeadline = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\PolicyManager\current\device\Update" -ErrorAction SilentlyContinue).ConfigureDeadlineForFeatureUpdates
+
 
 If ($OSName -match "Windows 11") {
 	#Windows 11
