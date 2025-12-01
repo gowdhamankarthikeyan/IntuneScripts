@@ -122,17 +122,23 @@ $WinCV = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVer
 $OSBuildNumber = $WinCV.CurrentBuild + "." + $WinCV.UBR
 $CurrentUpdate = [ordered]@{}
 $DaysSinceCurrentUpdateReleaseDate = -1
+$isLatest = $false
 
 If ($OSName -match "Windows 11") {
 	#Windows 11
 	$Updates = Get-Windows11ReleaseTableContent
+	$Updates | % {$_['AvailabilityDate'] = [DateTime]($_.'Availability Date')}
+	$LatestBUpdate = $updates | where-object {$_.'Update type' -match 'B'}|Sort-Object -Property @{e={$_.'AvailabilityDate'}} -Descending | select -First 1
 } Elseif ($OSName -match "Windows 10") {
 	#Windows 10
 	$Updates = Get-Windows10ReleaseTableContent
+	$Updates | % {$_['AvailabilityDate'] = [DateTime]($_.'Availability Date')}
+	$LatestBUpdate = $updates | where-object {$_.'Update type' -match 'B'}|Sort-Object -Property @{e={$_.'AvailabilityDate'}} -Descending | select -First 1
 } Else {
 	#Neither Windows 10 Nor Windows 11
 	$Status = "NeitherWindows10NotWindows11"
 }
+
 
 If ($Status -ne "NeitherWindows10NotWindows11"){
 	$CurrentUpdate = $Updates | where {$_.build -eq $OSBuildNumber}
@@ -148,8 +154,11 @@ If ($Status -ne "NeitherWindows10NotWindows11"){
 		$CurrentDate = Get-Date
 		#Rounding down to lowest integer
 		$DaysSinceCurrentUpdateReleaseDate = [Math]::floor(($CurrentDate - $AvailabilityDate).TotalDays)
+		If ($CurrentUpdate.'Update type' -eq $LatestBUpdate.'Update type') {
+			$isLatest = $true
+		}
 	} Else {
-			$Status = "UpdateNotFoundInCatalog"
+		$Status = "UpdateNotFoundInCatalog"
 	}
 } Else {
 	$Status = "InsiderBuild"
@@ -161,6 +170,7 @@ $CurrentUpdate['OSBuildNumber'] = $OSBuildNumber
 $CurrentUpdate['OSDisplayVersion'] = $OSDisplayVersion
 $CurrentUpdate['DaysSinceCurrentUpdateReleaseDate'] = $DaysSinceCurrentUpdateReleaseDate
 $CurrentUpdate['Status'] = $Status
+$CurrentUpdate['isLatest'] = $isLatest
 
 New-ItemProperty -Path $RegPath -Name "OSName" -Value $OSName -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 New-ItemProperty -Path $RegPath -Name "OSBuildNumber" -Value $OSBuildNumber -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
@@ -168,5 +178,6 @@ New-ItemProperty -Path $RegPath -Name "OSDisplayVersion" -Value $OSDisplayVersio
 New-ItemProperty -Path $RegPath -Name "DaysSinceCurrentUpdateReleaseDate" -Value $DaysSinceCurrentUpdateReleaseDate -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 New-ItemProperty -Path $RegPath -Name "Status" -Value $Status -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 New-ItemProperty -Path $RegPath -Name "StatusTime" -Value $StatusTime -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
+New-ItemProperty -Path $RegPath -Name "isLatest" -Value $isLatest -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 
 return $CurrentUpdate | ConvertTo-Json -Compress
