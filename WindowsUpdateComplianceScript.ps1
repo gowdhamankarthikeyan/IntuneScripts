@@ -215,23 +215,18 @@ If ($Status -ne "NeitherWindows10NotWindows11"){
 } Else {
 	$Status = "InsiderBuild"
 }
-If ($CurrentPatchLevel -ne 0){
-	#Running Older Patch
-	#Check if the device still hase (deferral + deadline) left for newest patch to get updated.
-	$TotalGracePeriod = $QualityUpdateGracePeriod + $QualityUpdateDeadline
-	If ($DaysSinceLatestUpdateReleaseDate -lt $TotalGracePeriod) {
-		$isLatestForThisDevice = $true
-		$RequiredPatchLevel = -1
-	} Else {
-		$RequiredPatchLevel = 0
-	}
-	$CurrentPatchLevel = -$CurrentPatchLevel
-	If ($RequiredPatchLevel -eq $CurrentPatchLevel) { $isLatestForThisDevice = $true }
-} Else {
+#Find RequiredPatchLevel for the device incorporating the deferral and deadline values (If any)
+$TotalGracePeriod = $QualityUpdateGracePeriod + $QualityUpdateDeadline
+If ($DaysSinceLatestUpdateReleaseDate -lt $TotalGracePeriod) {
+	# Device still has time to get latest applicable patch. So marking required as N-1
 	$isLatestForThisDevice = $true
+	$RequiredPatchLevel = 1
+} Else {
+	# Time elapsed to get latest applicable patch. So marking required as N.
+	$RequiredPatchLevel = 0
 }
 
-	
+If ($RequiredPatchLevel -eq $CurrentPatchLevel) { $isLatestForThisDevice = $true }
 
 #Formating Results
 $CurrentUpdate['OSName'] = $OSName
