@@ -136,8 +136,10 @@ $OSBuildNumber = $WinCV.CurrentBuild + "." + $WinCV.UBR
 #Initialize Variables
 $StatusTime = Get-Date
 $CurrentUpdate = [ordered]@{}
-$DaysSinceCurrentUpdateReleaseDate = ""
-$CurrentPatchLevel = ""
+$DaysSinceCurrentUpdateReleaseDate = "-1"
+$CurrentPatchLevel = "-1"
+$QualityUpdateGracePeriod = $FeatureUpdateGracePeriod = $QualityUpdateDeadline = $FeatureUpdateDeadline = 0
+$isLatestForThisDevice = $false
 
 
 #Get Windows Updates Policy Settings
@@ -197,16 +199,28 @@ If ($Status -ne "NeitherWindows10NotWindows11"){
 			$PropertyValue = $CurrentUpdate.$PropertyName
 			New-ItemProperty -Path $RegPath -Name $PropertyName -Value $PropertyValue -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 		}
-		$AvailabilityDate = Get-Date ($CurrentUpdate.'Availability date')
+		$CurrentUpdateAvailabilityDate = Get-Date ($CurrentUpdate.'Availability date')
+		$LatestBUpdateAvailabilityDate = Get-Date ($LatestBUpdate.'Availability date')
 		$CurrentDate = Get-Date
 		#Rounding down to lowest integer
-		$DaysSinceCurrentUpdateReleaseDate = [Math]::floor(($CurrentDate - $AvailabilityDate).TotalDays)
+		$DaysSinceCurrentUpdateReleaseDate = [Math]::floor(($CurrentDate - $CurrentUpdateAvailabilityDate).TotalDays)
+		$DaysSinceLatestUpdateReleaseDate = [Math]::floor(($CurrentDate - $LatestBUpdateAvailabilityDate).TotalDays)
 	} Else {
 		$Status = "UpdateNotFoundInCatalog"
 	}
 } Else {
 	$Status = "InsiderBuild"
 }
+If ($CurrentPatchLevel -ne 0){
+	#Running Older Patch
+	#Check if the device still hase (deferral + deadline) left for newest patch to get updated.
+	$TotalGracePeriod = $QualityUpdateGracePeriod + $QualityUpdateDeadline
+	If ($DaysSinceLatestUpdateReleaseDate -lt $TotalGracePeriod) {$isLatestForThisDevice = $true}
+} Else {
+	$isLatestForThisDevice = $true
+}
+
+	
 
 #Formating Results
 $CurrentUpdate['OSName'] = $OSName
@@ -215,6 +229,7 @@ $CurrentUpdate['OSDisplayVersion'] = $OSDisplayVersion
 $CurrentUpdate['DaysSinceCurrentUpdateReleaseDate'] = $DaysSinceCurrentUpdateReleaseDate
 $CurrentUpdate['Status'] = $Status
 $CurrentUpdate['CurrentPatchLevel'] = $CurrentPatchLevel
+$CurrentUpdate['isLatestForThisDevice'] = $isLatestForThisDevice
 
 New-ItemProperty -Path $RegPath -Name "OSName" -Value $OSName -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 New-ItemProperty -Path $RegPath -Name "OSBuildNumber" -Value $OSBuildNumber -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
@@ -223,5 +238,6 @@ New-ItemProperty -Path $RegPath -Name "DaysSinceCurrentUpdateReleaseDate" -Value
 New-ItemProperty -Path $RegPath -Name "Status" -Value $Status -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 New-ItemProperty -Path $RegPath -Name "StatusTime" -Value $StatusTime -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 New-ItemProperty -Path $RegPath -Name "CurrentPatchLevel" -Value $CurrentPatchLevel -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
+New-ItemProperty -Path $RegPath -Name "isLatestForThisDevice" -Value $isLatestForThisDevice -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 
 return $CurrentUpdate | ConvertTo-Json -Compress
