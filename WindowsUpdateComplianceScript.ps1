@@ -140,7 +140,7 @@ $DaysSinceCurrentUpdateReleaseDate = "-1"
 $CurrentPatchLevel = "-1"
 $QualityUpdateGracePeriod = $FeatureUpdateGracePeriod = $QualityUpdateDeadline = $FeatureUpdateDeadline = 0
 $isLatestForThisDevice = $false
-
+$12MonthsAgo = (Get-Date).AddMonths(-12)
 
 #Get Windows Updates Policy Settings
 # For Quality Update Grace Period
@@ -154,38 +154,40 @@ $FeatureUpdateDeadline = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Polic
 
 
 If ($OSName -match "Windows 11") {
-	#Windows 11
-	$Updates = Get-Windows11ReleaseTableContent
-	$Updates | % {$_['AvailabilityDate'] = [DateTime]($_.'Availability Date')}
-	$i = $skip = 0
-	while (!($FoundLatestApplicableUpdate)){
-		$LatestApplicableUpdate = ($updates | where-object {$_.'Update type' -match 'B'}|Sort-Object -Property @{e={$_.'AvailabilityDate'}} -Descending)[$i]
-		$AppliesTo = Get-AppliesTo -Uri $($LatestApplicableUpdate.'Support Link')
-		If ($AppliesTo -match "Windows 11"){ 
-			$FoundLatestApplicableUpdate = $true
-			$CurrentPatchLevel = $i - $Skip
-			Break;
+	#Windows 11 Filter Updates applicable for Device's Build; Sort By Availability Date
+	$UpdatesForCurrentBuild = Get-Windows11ReleaseTableContent | where-object {$_.'Build' -match $($WinCV.CurrentBuild)} | Sort-Object -Property @{e={[DateTime]($_.'Availability Date')}} -Descending
+	#Last 12 Months;
+	$Updates = $UpdatesForCurrentBuild |where-object {$_.'Update type' -match 'B'} | where-object {[DateTime]($_.'Availability Date') -gt $12MonthsAgo}
+	$ApplicableUpdates = @()
+	Foreach ($Update in $Updates){
+		If ($Update.Type -match "."){
+			#Skip
 		} Else {
-			$Skip++
+			If ($Update.'Update type' -match 'OOB'){
+				$AppliesTo = Get-AppliesTo -Uri $($Update.'Support Link')
+				If ($AppliesTo -match "Windows 11"){ 
+					$ApplicableUpdates += $Update
+				}
+			} Else { $ApplicableUpdates += $Update }
 		}
-		$i++
 	}
 } Elseif ($OSName -match "Windows 10") {
-	#Windows 10
-	$Updates = Get-Windows10ReleaseTableContent
-	$Updates | % {$_['AvailabilityDate'] = [DateTime]($_.'Availability Date')}
-	$i = $skip = 0
-	while (!($FoundLatestApplicableUpdate)){
-		$LatestApplicableUpdate = ($updates | where-object {$_.'Update type' -match 'B'}|Sort-Object -Property @{e={$_.'AvailabilityDate'}} -Descending)[$i]
-		$AppliesTo = Get-AppliesTo -Uri $($LatestApplicableUpdate.'Support Link')
-		If ($AppliesTo -match "Windows 10"){ 
-			$FoundLatestApplicableUpdate = $true
-			$CurrentPatchLevel = $i - $Skip
-			Break;
+	#Windows 10 Filter Updates applicable for Device's Build
+	$UpdatesForCurrentBuild = Get-Windows10ReleaseTableContent | where-object {$_.'Build' -match $($WinCV.CurrentBuild)}
+	# Filter only OOB or B Updates; Last 12 Months; Sort By Availability Date
+	$Updates = $UpdatesForCurrentBuild |where-object {$_.'Update type' -match 'B'} | Sort-Object -Property @{e={[DateTime]($_.'Availability Date')}} -Descending | where-object {[DateTime]($_.'Availability Date') -gt $12MonthsAgo}
+	$ApplicableUpdates = @()
+	Foreach ($Update in $Updates){
+		If ($Update.Type -match "."){
+			#Skip
 		} Else {
-			$Skip++
+			If ($Update.'Update type' -match 'OOB'){
+				$AppliesTo = Get-AppliesTo -Uri $($Update.'Support Link')
+				If ($AppliesTo -match "Windows 10"){ 
+					$ApplicableUpdates += $Update
+				}
+			} Else { $ApplicableUpdates += $Update }
 		}
-		$i++
 	}
 } Else {
 	#Neither Windows 10 Nor Windows 11
@@ -194,8 +196,19 @@ If ($OSName -match "Windows 11") {
 
 
 If ($Status -ne "NeitherWindows10NotWindows11"){
-	$CurrentUpdate = $Updates | where {$_.build -eq $OSBuildNumber}
-	If ($CurrentUpdate){
+	$CurrentUpdate = $UpdatesForCurrentBuild | where {$_.build -eq $OSBuildNumber}
+	$CurrentUpdateAvailabilityDate = Get-Date ($CurrentUpdate.'Availability date')
+	# Find Current Patch Level
+	# Step 1 - Compare with $ApplicableUpdates
+	$CurrentPatchLevel = $ApplicableUpdates.IndexOf($CurrentUpdate)
+	$LatestApplicableUpdateAvailabilityDate = Get-Date ($ApplicableUpdates.'Availability date')[0]
+	#Step 2 - If not, compare with $UpdatesForCurrentBuild (Most like device is on D update)
+	If ($CurrentPatchLevel -eq "-1"){ 
+		$CurrentPatchLevel = $UpdatesForCurrentBuild.IndexOf($CurrentUpdate)
+		$LatestApplicableUpdateAvailabilityDate = Get-Date ($UpdatesForCurrentBuild.'Availability date')[0]
+	}
+	# If found, proceed
+	If ($CurrentPatchLevel -ne "-1"){
 		$Status = "UpdateFoundInCatalog"
 		$Properties = [PSCustomObject]$CurrentUpdate| Get-Member -MemberType NoteProperty
 		foreach ($Property in $Properties){
@@ -203,8 +216,6 @@ If ($Status -ne "NeitherWindows10NotWindows11"){
 			$PropertyValue = $CurrentUpdate.$PropertyName
 			New-ItemProperty -Path $RegPath -Name $PropertyName -Value $PropertyValue -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 		}
-		$CurrentUpdateAvailabilityDate = Get-Date ($CurrentUpdate.'Availability date')
-		$LatestApplicableUpdateAvailabilityDate = Get-Date ($LatestApplicableUpdate.'Availability date')
 		$CurrentDate = Get-Date
 		#Rounding down to lowest integer
 		$DaysSinceCurrentUpdateReleaseDate = [Math]::floor(($CurrentDate - $CurrentUpdateAvailabilityDate).TotalDays)
@@ -226,7 +237,7 @@ If ($DaysSinceLatestUpdateReleaseDate -lt $TotalGracePeriod) {
 	$RequiredPatchLevel = 0
 }
 
-If ($RequiredPatchLevel -le $CurrentPatchLevel) { $isLatestForThisDevice = $true }
+If ($CurrentPatchLevel -le $RequiredPatchLevel) { $isLatestForThisDevice = $true }
 
 #Formating Results
 $CurrentUpdate['OSName'] = $OSName
@@ -249,4 +260,3 @@ New-ItemProperty -Path $RegPath -Name "RequiredPatchLevel" -Value $RequiredPatch
 New-ItemProperty -Path $RegPath -Name "isLatestForThisDevice" -Value $isLatestForThisDevice -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 
 return $CurrentUpdate | ConvertTo-Json -Compress
-
