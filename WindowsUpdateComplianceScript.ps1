@@ -136,7 +136,7 @@ $OSBuildNumber = $WinCV.CurrentBuild + "." + $WinCV.UBR
 #Initialize Variables
 $StatusTime = Get-Date
 $CurrentUpdate = [ordered]@{}
-$DaysSinceCurrentUpdateReleaseDate = -1
+$DaysSinceCurrentUpdateReleaseDate = $DaysSinceLatestUpdateReleaseDate = -1
 $CurrentPatchLevel = -1
 $RequiredPatchLevel = 0
 $QualityUpdateGracePeriod = $FeatureUpdateGracePeriod = $QualityUpdateDeadline = $FeatureUpdateDeadline = 0
@@ -242,6 +242,7 @@ If ($Status -eq "UpdateFoundInCatalog"){
 
 	If ($CurrentPatchLevel -le $RequiredPatchLevel) { $isLatestForThisDevice = $true }
 }
+
 #Formating Results
 $CurrentUpdate['OSName'] = $OSName
 $CurrentUpdate['OSBuildNumber'] = $OSBuildNumber
