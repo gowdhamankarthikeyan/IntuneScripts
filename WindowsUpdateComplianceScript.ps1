@@ -158,7 +158,7 @@ If ($OSName -match "Windows 11") {
 	$Updates = Get-Windows11ReleaseTableContent
 	$Updates | % {$_['AvailabilityDate'] = [DateTime]($_.'Availability Date')}
 	$i = $skip = 0
-	while (!($FoundLatestBUpdate)){
+	while (!($FoundLatestApplicableUpdate)){
 		$LatestApplicableUpdate = ($updates | where-object {$_.'Update type' -match 'B'}|Sort-Object -Property @{e={$_.'AvailabilityDate'}} -Descending)[$i]
 		$AppliesTo = Get-AppliesTo -Uri $($LatestApplicableUpdate.'Support Link')
 		If ($AppliesTo -match "Windows 11"){ 
@@ -226,7 +226,7 @@ If ($DaysSinceLatestUpdateReleaseDate -lt $TotalGracePeriod) {
 	$RequiredPatchLevel = 0
 }
 
-If ($RequiredPatchLevel -eq $CurrentPatchLevel) { $isLatestForThisDevice = $true }
+If ($RequiredPatchLevel -le $CurrentPatchLevel) { $isLatestForThisDevice = $true }
 
 #Formating Results
 $CurrentUpdate['OSName'] = $OSName
@@ -249,3 +249,4 @@ New-ItemProperty -Path $RegPath -Name "RequiredPatchLevel" -Value $RequiredPatch
 New-ItemProperty -Path $RegPath -Name "isLatestForThisDevice" -Value $isLatestForThisDevice -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
 
 return $CurrentUpdate | ConvertTo-Json -Compress
+
