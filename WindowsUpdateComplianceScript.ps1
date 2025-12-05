@@ -233,7 +233,6 @@ If ($Status -eq "UpdateFoundInCatalog"){
 	$TotalGracePeriod = $QualityUpdateGracePeriod + $QualityUpdateDeadline
 	If ($DaysSinceLatestUpdateReleaseDate -lt $TotalGracePeriod) {
 		# Device still has time to get latest applicable patch. So marking required as N-1
-		$isLatestForThisDevice = $true
 		$RequiredPatchLevel = 1
 	} Else {
 		# Time elapsed to get latest applicable patch. So marking required as N.
