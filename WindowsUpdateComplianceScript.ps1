@@ -172,10 +172,10 @@ If ($OSName -match "Windows 11") {
 		}
 	}
 } Elseif ($OSName -match "Windows 10") {
-	#Windows 10 Filter Updates applicable for Device's Build
-	$UpdatesForCurrentBuild = Get-Windows10ReleaseTableContent | where-object {$_.'Build' -match $($WinCV.CurrentBuild)}
-	# Filter only OOB or B Updates; Last 12 Months; Sort By Availability Date
-	$Updates = $UpdatesForCurrentBuild |where-object {$_.'Update type' -match 'B'} | Sort-Object -Property @{e={[DateTime]($_.'Availability Date')}} -Descending | where-object {[DateTime]($_.'Availability Date') -gt $12MonthsAgo}
+	#Windows 10 Filter Updates applicable for Device's Build; Sort By Availability Date
+	$UpdatesForCurrentBuild = Get-Windows10ReleaseTableContent | where-object {$_.'Build' -match $($WinCV.CurrentBuild)} | Sort-Object -Property @{e={[DateTime]($_.'Availability Date')}} -Descending
+	#Last 12 Months;
+	$Updates = $UpdatesForCurrentBuild |where-object {$_.'Update type' -match 'B'} | where-object {[DateTime]($_.'Availability Date') -gt $12MonthsAgo}
 	$ApplicableUpdates = @()
 	Foreach ($Update in $Updates){
 		If ($Update.Type -match "."){
