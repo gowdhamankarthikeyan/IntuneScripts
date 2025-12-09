@@ -110,14 +110,21 @@ Function Get-AppliesTo {
 	param (
 		$Uri
 	)
-	$response = Invoke-WebRequest -Uri $Uri -UseBasicParsing
-	$html = [System.Web.HttpUtility]::HtmlDecode($response.Content)
-	$AppliesToMatches = [regex]::Matches($html, '<span class="appliesToItem"[^>]*>.*?</span>', [System.Text.RegularExpressions.RegexOptions]::Singleline)
-	foreach ($match in $AppliesToMatches) {
-		$AppliesToMatchesHTML = $match.Value
-		$AppliesTo = if ($AppliesToMatchesHTML -match '<span[^>]*>(.*?)</span>') { $matches[1].Trim() }
+	try {
+		$AppliesTo = $Null
+		$response = Invoke-WebRequest -Uri $Uri -UseBasicParsing
+		$html = [System.Web.HttpUtility]::HtmlDecode($response.Content)
+		$AppliesToMatches = [regex]::Matches($html, '<span class="appliesToItem"[^>]*>.*?</span>', [System.Text.RegularExpressions.RegexOptions]::Singleline)
+		foreach ($match in $AppliesToMatches) {
+			$AppliesToMatchesHTML = $match.Value
+			$AppliesTo += if ($AppliesToMatchesHTML -match '<span[^>]*>(.*?)</span>') { $matches[1].Trim() }
+		}
+		return $AppliesTo
 	}
-	return $AppliesTo
+	catch {
+        Write-Error "Fetch/parse error: $($_.Exception.Message)"
+        return @()
+    }
 }
 
 #Create Logging Registry Path
@@ -156,7 +163,7 @@ $FeatureUpdateDeadline = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Polic
 
 If ($OSName -match "Windows 11") {
 	#Windows 11 Filter Updates applicable for Device's Build; Sort By Build Number
-	$UpdatesForCurrentBuild = Get-Windows11ReleaseTableContent | where-object {$_.'Build' -match $($WinCV.CurrentBuild)} | Sort-Object -Property @{e={$_.'Build'}} -Descending
+	$UpdatesForCurrentBuild = Get-Windows11ReleaseTableContent | where-object {$_.'Build' -match $($WinCV.CurrentBuild)} | Sort-Object -Property @{e={[System.Version]($_.'Build')}} -Descending
 	#Last 12 Months;
 	$Updates = $UpdatesForCurrentBuild |where-object {$_.'Update type' -match 'B'} | where-object {[DateTime]($_.'Availability Date') -gt $12MonthsAgo}
 	$ApplicableUpdates = @()
@@ -174,7 +181,7 @@ If ($OSName -match "Windows 11") {
 	}
 } Elseif ($OSName -match "Windows 10") {
 	#Windows 10 Filter Updates applicable for Device's Build; Sort By Build Number
-	$UpdatesForCurrentBuild = Get-Windows10ReleaseTableContent | where-object {$_.'Build' -match $($WinCV.CurrentBuild)} | Sort-Object -Property @{e={$_.'Build'}} -Descending
+	$UpdatesForCurrentBuild = Get-Windows10ReleaseTableContent | where-object {$_.'Build' -match $($WinCV.CurrentBuild)} | Sort-Object -Property @{e={[System.Version]($_.'Build')}} -Descending
 	#Last 12 Months;
 	$Updates = $UpdatesForCurrentBuild |where-object {$_.'Update type' -match 'B'} | where-object {[DateTime]($_.'Availability Date') -gt $12MonthsAgo}
 	$ApplicableUpdates = @()
@@ -198,30 +205,33 @@ If ($OSName -match "Windows 11") {
 
 If ($Status -ne "NeitherWindows10NotWindows11"){
 	$CurrentUpdate = $UpdatesForCurrentBuild | where {$_.build -eq $OSBuildNumber}
-	$CurrentUpdateAvailabilityDate = Get-Date ($CurrentUpdate.'Availability date')
-	# Find Current Patch Level
-	# Step 1 - Compare with $ApplicableUpdates
-	$CurrentPatchLevel = $ApplicableUpdates.IndexOf($CurrentUpdate)
-	$LatestApplicableUpdateAvailabilityDate = Get-Date ($ApplicableUpdates.'Availability date')[0]
-	#Step 2 - If not, compare with $UpdatesForCurrentBuild (Most likely, the device is on D update)
-	If ($CurrentPatchLevel -eq "-1"){
-		$CurrentPatchLevel = $UpdatesForCurrentBuild.IndexOf($CurrentUpdate)
-		$LatestApplicableUpdateAvailabilityDate = Get-Date ($UpdatesForCurrentBuild.'Availability date')[0]
-	}
-	# If found, proceed
-	If ($CurrentPatchLevel -ne "-1"){
-		$Status = "UpdateFoundInCatalog"
-		$Properties = [PSCustomObject]$CurrentUpdate| Get-Member -MemberType NoteProperty
-		foreach ($Property in $Properties){
-			$PropertyName = $($Property.Name)
-			$PropertyValue = $CurrentUpdate.$PropertyName
-			New-ItemProperty -Path $RegPath -Name $PropertyName -Value $PropertyValue -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
+	If ($CurrentUpdate){
+		$CurrentUpdateAvailabilityDate = Get-Date ($CurrentUpdate.'Availability date')
+		# Find Current Patch Level
+		# Step 1 - Compare with $ApplicableUpdates
+		$CurrentPatchLevel = $ApplicableUpdates.IndexOf($CurrentUpdate)
+		$LatestApplicableUpdateAvailabilityDate = Get-Date ($ApplicableUpdates.'Availability date')[0]
+		#Step 2 - If not, compare with $UpdatesForCurrentBuild (Most likely, the device is on D update or older than 12 months ago)
+		If ($CurrentPatchLevel -eq "-1"){
+			$CurrentPatchLevel = $UpdatesForCurrentBuild.IndexOf($CurrentUpdate)
+			$LatestApplicableUpdateAvailabilityDate = Get-Date ($UpdatesForCurrentBuild.'Availability date')[0]
 		}
-		$CurrentDate = Get-Date
-		#Rounding down to lowest integer
-		$DaysSinceCurrentUpdateReleaseDate = [Math]::floor(($CurrentDate - $CurrentUpdateAvailabilityDate).TotalDays)
-		$DaysSinceLatestUpdateReleaseDate = [Math]::floor(($CurrentDate - $LatestApplicableUpdateAvailabilityDate).TotalDays)
-	} Else {
+		# If found, proceed
+		If ($CurrentPatchLevel -ne "-1"){
+			$Status = "UpdateFoundInCatalog"
+			$Properties = [PSCustomObject]$CurrentUpdate| Get-Member -MemberType NoteProperty
+			foreach ($Property in $Properties){
+				$PropertyName = $($Property.Name)
+				$PropertyValue = $CurrentUpdate.$PropertyName
+				New-ItemProperty -Path $RegPath -Name $PropertyName -Value $PropertyValue -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
+			}
+			$CurrentDate = Get-Date
+			#Rounding down to lowest integer
+			$DaysSinceCurrentUpdateReleaseDate = [Math]::floor(($CurrentDate - $CurrentUpdateAvailabilityDate).TotalDays)
+			$DaysSinceLatestUpdateReleaseDate = [Math]::floor(($CurrentDate - $LatestApplicableUpdateAvailabilityDate).TotalDays)
+		}
+	}
+	Else {
 		$Status = "UpdateNotFoundInCatalog"
 	}
 } Else {
