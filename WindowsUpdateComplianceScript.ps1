@@ -232,10 +232,8 @@ If ($Status -ne "NeitherWindows10NotWindows11"){
 		}
 	}
 	Else {
-		$Status = "UpdateNotFoundInCatalog"
+		$Status = "InsiderBuild"
 	}
-} Else {
-	$Status = "InsiderBuild"
 }
 
 If ($Status -eq "UpdateFoundInCatalog"){
