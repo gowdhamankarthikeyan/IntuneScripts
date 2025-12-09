@@ -155,8 +155,8 @@ $FeatureUpdateDeadline = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Polic
 
 
 If ($OSName -match "Windows 11") {
-	#Windows 11 Filter Updates applicable for Device's Build; Sort By Availability Date
-	$UpdatesForCurrentBuild = Get-Windows11ReleaseTableContent | where-object {$_.'Build' -match $($WinCV.CurrentBuild)} | Sort-Object -Property @{e={[DateTime]($_.'Availability Date')}} -Descending
+	#Windows 11 Filter Updates applicable for Device's Build; Sort By Build Number
+	$UpdatesForCurrentBuild = Get-Windows11ReleaseTableContent | where-object {$_.'Build' -match $($WinCV.CurrentBuild)} | Sort-Object -Property @{e={$_.'Build'}} -Descending
 	#Last 12 Months;
 	$Updates = $UpdatesForCurrentBuild |where-object {$_.'Update type' -match 'B'} | where-object {[DateTime]($_.'Availability Date') -gt $12MonthsAgo}
 	$ApplicableUpdates = @()
@@ -173,8 +173,8 @@ If ($OSName -match "Windows 11") {
 		}
 	}
 } Elseif ($OSName -match "Windows 10") {
-	#Windows 10 Filter Updates applicable for Device's Build; Sort By Availability Date
-	$UpdatesForCurrentBuild = Get-Windows10ReleaseTableContent | where-object {$_.'Build' -match $($WinCV.CurrentBuild)} | Sort-Object -Property @{e={[DateTime]($_.'Availability Date')}} -Descending
+	#Windows 10 Filter Updates applicable for Device's Build; Sort By Build Number
+	$UpdatesForCurrentBuild = Get-Windows10ReleaseTableContent | where-object {$_.'Build' -match $($WinCV.CurrentBuild)} | Sort-Object -Property @{e={$_.'Build'}} -Descending
 	#Last 12 Months;
 	$Updates = $UpdatesForCurrentBuild |where-object {$_.'Update type' -match 'B'} | where-object {[DateTime]($_.'Availability Date') -gt $12MonthsAgo}
 	$ApplicableUpdates = @()
@@ -203,8 +203,8 @@ If ($Status -ne "NeitherWindows10NotWindows11"){
 	# Step 1 - Compare with $ApplicableUpdates
 	$CurrentPatchLevel = $ApplicableUpdates.IndexOf($CurrentUpdate)
 	$LatestApplicableUpdateAvailabilityDate = Get-Date ($ApplicableUpdates.'Availability date')[0]
-	#Step 2 - If not, compare with $UpdatesForCurrentBuild (Most like device is on D update)
-	If ($CurrentPatchLevel -eq "-1"){ 
+	#Step 2 - If not, compare with $UpdatesForCurrentBuild (Most likely, the device is on D update)
+	If ($CurrentPatchLevel -eq "-1"){
 		$CurrentPatchLevel = $UpdatesForCurrentBuild.IndexOf($CurrentUpdate)
 		$LatestApplicableUpdateAvailabilityDate = Get-Date ($UpdatesForCurrentBuild.'Availability date')[0]
 	}
