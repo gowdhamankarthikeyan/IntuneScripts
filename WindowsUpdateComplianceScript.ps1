@@ -129,7 +129,10 @@ Function Get-AppliesTo {
 
 #Create Logging Registry Path
 $Script:RegPath = "HKLM:\Software\WindowsUpdateCompliance\"
-If (!(Test-Path $RegPath)){
+If (Test-Path $RegPath){
+	Remove-Item -Path $RegPath -Force -ErrorAction SilentlyContinue | Out-Null
+	New-Item -Path $RegPath -Force -ErrorAction SilentlyContinue | Out-Null
+} Else {
 	New-Item -Path $RegPath -Force -ErrorAction SilentlyContinue | Out-Null
 }
 
@@ -147,6 +150,7 @@ $DaysSinceCurrentUpdateReleaseDate = $DaysSinceLatestUpdateReleaseDate = -1
 $CurrentPatchLevel = -1
 $RequiredPatchLevel = 0
 $QualityUpdateGracePeriod = $FeatureUpdateGracePeriod = $QualityUpdateDeadline = $FeatureUpdateDeadline = 0
+$TotalGracePeriod = 0
 $isLatestForThisDevice = $false
 $12MonthsAgo = (Get-Date).AddMonths(-12)
 
@@ -163,7 +167,7 @@ $FeatureUpdateDeadline = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Polic
 
 If ($OSName -match "Windows 11") {
 	#Windows 11 Filter Updates applicable for Device's Build; Sort By Build Number
-	$UpdatesForCurrentBuild = Get-Windows11ReleaseTableContent | where-object {$_.'Build' -match $($WinCV.CurrentBuild)} | Sort-Object -Property @{e={[System.Version]($_.'Build')}} -Descending
+	$UpdatesForCurrentBuild = Get-Windows11ReleaseTableContent | where-object {($_.'Build' -match $($WinCV.CurrentBuild)) -and ($_.Type -notmatch ".")} | Sort-Object -Property @{e={[System.Version]($_.'Build')}} -Descending
 	#Last 12 Months;
 	$Updates = $UpdatesForCurrentBuild |where-object {$_.'Update type' -match 'B'} | where-object {[DateTime]($_.'Availability Date') -gt $12MonthsAgo}
 	$ApplicableUpdates = @()
@@ -181,7 +185,7 @@ If ($OSName -match "Windows 11") {
 	}
 } Elseif ($OSName -match "Windows 10") {
 	#Windows 10 Filter Updates applicable for Device's Build; Sort By Build Number
-	$UpdatesForCurrentBuild = Get-Windows10ReleaseTableContent | where-object {$_.'Build' -match $($WinCV.CurrentBuild)} | Sort-Object -Property @{e={[System.Version]($_.'Build')}} -Descending
+	$UpdatesForCurrentBuild = Get-Windows10ReleaseTableContent | where-object {($_.'Build' -match $($WinCV.CurrentBuild)) -and ($_.Type -notmatch ".")} | Sort-Object -Property @{e={[System.Version]($_.'Build')}} -Descending
 	#Last 12 Months;
 	$Updates = $UpdatesForCurrentBuild |where-object {$_.'Update type' -match 'B'} | where-object {[DateTime]($_.'Availability Date') -gt $12MonthsAgo}
 	$ApplicableUpdates = @()
@@ -219,16 +223,21 @@ If ($Status -ne "NeitherWindows10NotWindows11"){
 		# If found, proceed
 		If ($CurrentPatchLevel -ne "-1"){
 			$Status = "UpdateFoundInCatalog"
-			$Properties = [PSCustomObject]$CurrentUpdate| Get-Member -MemberType NoteProperty
-			foreach ($Property in $Properties){
-				$PropertyName = $($Property.Name)
-				$PropertyValue = $CurrentUpdate.$PropertyName
-				New-ItemProperty -Path $RegPath -Name $PropertyName -Value $PropertyValue -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
-			}
 			$CurrentDate = Get-Date
 			#Rounding down to lowest integer
 			$DaysSinceCurrentUpdateReleaseDate = [Math]::floor(($CurrentDate - $CurrentUpdateAvailabilityDate).TotalDays)
 			$DaysSinceLatestUpdateReleaseDate = [Math]::floor(($CurrentDate - $LatestApplicableUpdateAvailabilityDate).TotalDays)
+			#Find RequiredPatchLevel for the device incorporating the deferral and deadline values (If any)
+			$TotalGracePeriod = $QualityUpdateGracePeriod + $QualityUpdateDeadline
+			If ($DaysSinceLatestUpdateReleaseDate -lt $TotalGracePeriod) {
+				# Device still has time to get latest applicable patch. So marking required as N-1
+				$RequiredPatchLevel = 1
+			} Else {
+				# Time elapsed to get latest applicable patch. So marking required as N.
+				$RequiredPatchLevel = 0
+			}
+
+			If ($CurrentPatchLevel -le $RequiredPatchLevel) { $isLatestForThisDevice = $true }
 		}
 	}
 	Else {
@@ -236,40 +245,30 @@ If ($Status -ne "NeitherWindows10NotWindows11"){
 	}
 }
 
-If ($Status -eq "UpdateFoundInCatalog"){
-	#Find RequiredPatchLevel for the device incorporating the deferral and deadline values (If any)
-	$TotalGracePeriod = $QualityUpdateGracePeriod + $QualityUpdateDeadline
-	If ($DaysSinceLatestUpdateReleaseDate -lt $TotalGracePeriod) {
-		# Device still has time to get latest applicable patch. So marking required as N-1
-		$RequiredPatchLevel = 1
-	} Else {
-		# Time elapsed to get latest applicable patch. So marking required as N.
-		$RequiredPatchLevel = 0
-	}
+# Format Result
 
-	If ($CurrentPatchLevel -le $RequiredPatchLevel) { $isLatestForThisDevice = $true }
+If ($CurrentUpdate) {
+	$Result = $CurrentUpdate
+} Else {
+	$Result = @{}
 }
 
-#Formating Results
-$CurrentUpdate['OSName'] = $OSName
-$CurrentUpdate['OSBuildNumber'] = $OSBuildNumber
-$CurrentUpdate['OSDisplayVersion'] = $OSDisplayVersion
-$CurrentUpdate['DaysSinceCurrentUpdateReleaseDate'] = $DaysSinceCurrentUpdateReleaseDate
-$CurrentUpdate['DaysSinceLatestUpdateReleaseDate'] = $DaysSinceLatestUpdateReleaseDate
-$CurrentUpdate['Status'] = $Status
-$CurrentUpdate['CurrentPatchLevel'] = $CurrentPatchLevel
-$CurrentUpdate['RequiredPatchLevel'] = $RequiredPatchLevel
-$CurrentUpdate['isLatestForThisDevice'] = $isLatestForThisDevice
+$Result['OSName'] = $OSName
+$Result['OSBuildNumber'] = $OSBuildNumber
+$Result['OSDisplayVersion'] = $OSDisplayVersion
+$Result['DaysSinceCurrentUpdateReleaseDate'] = $DaysSinceCurrentUpdateReleaseDate
+$Result['DaysSinceLatestUpdateReleaseDate'] = $DaysSinceLatestUpdateReleaseDate
+$Result['Status'] = $Status
+$Result['StatusTime'] = $StatusTime
+$Result['CurrentPatchLevel'] = $CurrentPatchLevel
+$Result['RequiredPatchLevel'] = $RequiredPatchLevel
+$Result['isLatestForThisDevice'] = $isLatestForThisDevice
+$Properties = [PSCustomObject] $Result| Get-Member -MemberType NoteProperty
+foreach ($Property in $Properties){
+	$PropertyName = $($Property.Name)
+	$PropertyValue = $CurrentUpdate.$PropertyName
+	New-ItemProperty -Path $RegPath -Name $PropertyName -Value $PropertyValue -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
+}
 
-New-ItemProperty -Path $RegPath -Name "OSName" -Value $OSName -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
-New-ItemProperty -Path $RegPath -Name "OSBuildNumber" -Value $OSBuildNumber -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
-New-ItemProperty -Path $RegPath -Name "OSDisplayVersion" -Value $OSDisplayVersion -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
-New-ItemProperty -Path $RegPath -Name "DaysSinceCurrentUpdateReleaseDate" -Value $DaysSinceCurrentUpdateReleaseDate -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
-New-ItemProperty -Path $RegPath -Name "DaysSinceLatestUpdateReleaseDate" -Value $DaysSinceLatestUpdateReleaseDate -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
-New-ItemProperty -Path $RegPath -Name "Status" -Value $Status -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
-New-ItemProperty -Path $RegPath -Name "StatusTime" -Value $StatusTime -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
-New-ItemProperty -Path $RegPath -Name "CurrentPatchLevel" -Value $CurrentPatchLevel -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
-New-ItemProperty -Path $RegPath -Name "RequiredPatchLevel" -Value $RequiredPatchLevel -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
-New-ItemProperty -Path $RegPath -Name "isLatestForThisDevice" -Value $isLatestForThisDevice -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
-
-return $CurrentUpdate | ConvertTo-Json -Compress
+# Return Result
+return $Result | ConvertTo-Json -Compress
